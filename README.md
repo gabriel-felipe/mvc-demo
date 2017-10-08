@@ -1,6 +1,6 @@
 Mvc demo code
 =====
-This is a basic mvc demo, coded with education purpose. It does have some structural problems and
+This is a basic mvc demo, coded with educational purpose. It does have some structural problems and
 it should not be used in production.
 
 If you want to test it you can clone this repository and call the url /meumodulo or /meumodulo/index/index.
