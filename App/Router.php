@@ -1,12 +1,15 @@
 <?php
 /**
  * Classe router. Tem objetivo de receber a url e mapear a requisição para o controller correto.
+ * Também é utilizado para gerar uma url a partir de uma série de parâmetros.
+ * TODO: Atualizar comentários, classe foi reescrita e os comentários não estão muito úteis.
  */
 namespace Mvc\App;
+use Mvc\App\Router\Exception as Exception;
 class Router
 {
     protected $url;
-
+    protected $routes;
     /**
      * __construct
      *
@@ -31,61 +34,40 @@ class Router
     function exec()
     {
 
-        /**
-        * Remove uma possível / no final da url e quebra a url por "/"
-        * resultando em um array como:
-        * $pieces[0] => "Modulo"
-        * $pieces[1] => "Controller"
-        * $pieces[2] => "Action"
-        */
-        $pieces = explode("/",trim($this->getUrl(),"/"));
+        $params = $this->urlToParams();
 
-        /**
-        * Coloca a primeira letra do módulo para maiúscula,
-        * para seguir o padrão de nomenclatura.
-        */
-        $modulo = ucfirst($pieces[0]);
-
-        /**
-        * Define controller padrão como default
-        */
-        $controller = "Index";
-
-        /**
-        * Caso esteja definido o índice 1 do array $pieces,
-        * isso significa que o controller foi especificado,
-        * então atualizamos o valor da variável $controller
-        */
-        if (isset($pieces[1])) {
-            $controller = ucfirst($pieces[1]);
+        if (!$params) {
+            throw new Exception("Não foi encontrada uma rota compatível com a url '".$this->getUrl()."'");
         }
 
-        /**
-        * Define action padrão como default
-        */
-        $action = "index";
-        /**
-        * Caso esteja definido o índice 2 do array $pieces,
-        * isso significa que a action foi especificada,
-        * então atualizamos o valor da variável $action
-        */
-        if (isset($pieces[2])) {
-            $action = $pieces[2];
+        if (!isset($params['route'])) {
+            throw new Exception("O parâmetro route é obrigatório em todas as urls.", 1);
         }
+
+        $route = $params['route'];
+        unset($params['route']);
+        foreach ($params as $key => $value) {
+            $_GET[$key] = $value;
+        }
+
+        $routeParams = $this->routeToParams($route);
+        $module = ucfirst($routeParams['module']);
+        $action = lcfirst($routeParams['action']);
+        $controller = ucfirst($routeParams['controller']);
 
         /**
         * Seta no registro os valores do módulo, controller e action
         * Para que seja possível saber seus valores em outras classes se necessário
         * Útil para checagens futuras, como em um sistema ACL
         */
-        Registry::set("modulo",$modulo);
+        Registry::set("module",$module);
         Registry::set("action",$action);
         Registry::set("controller",$controller);
 
         /**
         * Com os dados encontrados, escreve o nome da classe segundo o padrão adotado.
         */
-        $class = "Mvc\\Modules\\".$modulo."\\Controller\\".$controller;
+        $class = "Mvc\\Modules\\".$module."\\Controller\\".$controller;
 
         /**
         * Se o controller existir, instanciamos ele e disparamos a action encontrada.
@@ -97,8 +79,179 @@ class Router
             /**
             * Se não encontrado, disparamos uma exceção parando o código.
             */
-            throw new \Exception("Controller $controller não encontrado no módulo $modulo. ", 1);
+            throw new Exception("Controller $controller não encontrado no módulo $module. ", 1);
         }
+    }
+
+    public function urlToParams()
+    {
+        $url = $this->getUrl();
+        $pieces = explode("/",$url);
+        $params = array();
+        foreach ($this->getRoutes() as $urlRoute => $params) {
+            /* Se for uma correspondência exata, retorna os parâmetros */
+            if ($url === $urlRoute) {
+                return $params;
+            }
+
+            $piecesRoute = explode("/",$urlRoute);
+
+            /**
+             * Se a url da requisição tiver uma quantidade diferente de pedaços da url sendo comparada,
+             * Já pula para a próxima, pois um match é impossível
+             */
+
+            if (count($piecesRoute) !== count($pieces)) {
+                continue;
+            }
+            $paramsPositions = $this->getParamsPositions($piecesRoute);
+            $matchAllPieces = true;
+            $replaces = array();
+            foreach ($pieces as $key => $piece) {
+                $equivalentRoutePiece = $piecesRoute[$key];
+                /* Se os dois pedaços são iguais, então é um match no pedaço, pula a checagem para o próximo pedaço. */
+                if ($equivalentRoutePiece === $piece) {
+                    continue;
+                }
+                $regexIndex = array_search($key,$paramsPositions);
+                if ($regexIndex !== false) {
+                    $regex = rtrim($equivalentRoutePiece,"}");
+                    $regex = ltrim($regex,"{");
+                    $regex = "/$regex/";
+                    if (preg_match($regex,$piece)) {
+                        $replace = "$".($regexIndex+1);
+                        $replaces[$replace] = $piece;
+                        continue;
+                    }
+                }
+                $matchAllPieces = false;
+                break;
+            }
+
+            if ($matchAllPieces) {
+                if ($replaces) {
+                    $params = $this->replaceRegexIntoValues($replaces,$params);
+                }
+
+                return $params;
+            }
+
+
+        }
+        return false;
+    }
+
+    public function url($route,$params=array())
+    {
+        $urlParams = $this->routeToParams($route);
+        $adicionalParams = $params;
+        $urlAllParams = array_merge($urlParams,$adicionalParams);
+
+        foreach ($this->getRoutes() as $routeUrl => $route) {
+            $routeParams = $this->routeToParams($route['route']);
+            $mapRegex = $this->getMapRegex($routeUrl);
+            $routeAllParams = array_merge($routeParams,$route);
+
+            unset($routeAllParams['route']);
+            if (count($routeAllParams) !== count($urlAllParams)) {
+                continue;
+            }
+
+            $matchAllParams = true;
+            $regexResult = array();
+            foreach ($routeAllParams as $key => $value) {
+                $urlValue = (isset($urlAllParams[$key])) ? $urlAllParams[$key] : null;
+
+                if ($value === $urlValue) {
+                    continue;
+                }
+
+                if (array_key_exists($value,$mapRegex)) {
+                    $regex = rtrim($mapRegex[$value],"}");
+                    $regex = ltrim($regex,"{");
+                    $regex = "/$regex/";
+                    if (preg_match($regex,$urlValue)) {
+                        $regexResult[$value] = $urlValue;
+                        continue;
+                    }
+                }
+
+                $matchAllParams = false;
+                break;
+
+            }
+
+            if ($matchAllParams) {
+
+                $url = explode("/",$routeUrl);
+
+                foreach ($regexResult as $paramKey => $value) {
+                    $paramKey = (int)str_replace("$","",$paramKey) + 1;
+                    $url[$paramKey] = $value;
+                }
+                return implode("/",$url);
+
+            }
+
+
+        }
+        $url = "?url=".implode("/",$urlParams)."&".http_build_query($params);
+        return $url;
+    }
+
+    protected function getMapRegex($url)
+    {
+        $urlPieces = explode("/",$url);
+        $paramsPositions = $this->getParamsPositions($urlPieces);
+        $map = array();
+        foreach ($paramsPositions as $key => $index) {
+            $map["$".($key+1)] = $urlPieces[$index];
+        }
+        return $map;
+    }
+
+    protected function routeToParams($route)
+    {
+        $route = explode("/",$route);
+        $result = array(
+            "module"=>$route[0],
+            "controller"=>"Index",
+            "action"=>"index"
+        );
+
+        if (isset($route[1])) {
+            $result['controller'] = $route[1];
+        }
+
+        if (isset($route[2])) {
+            $result['action'] = $route[2];
+        }
+        return $result;
+    }
+
+    protected function replaceRegexIntoValues($regexValuesMap,$params)
+    {
+        foreach ($params as $key => $value) {
+            $params[$key] = str_replace(array_keys($regexValuesMap),array_values($regexValuesMap),$value);
+        }
+        return $params;
+    }
+
+    protected function getParamsPositions($pieces)
+    {
+        $positions = array();
+        foreach ($pieces as $k => $piece) {
+            $piece = trim($piece);
+            if (preg_match('/^\{[^}]+\}$/',$piece)) {
+                $positions[] = $k;
+            }
+        }
+        return $positions;
+    }
+
+    protected function matchUrlToRoute($url,$params)
+    {
+
     }
     /**
      * Get the value of Url
@@ -120,6 +273,31 @@ class Router
     public function setUrl($url)
     {
         $this->url = $url;
+
+        return $this;
+    }
+
+
+    /**
+     * Get the value of Routes
+     *
+     * @return mixed
+     */
+    public function getRoutes()
+    {
+        return $this->routes;
+    }
+
+    /**
+     * Set the value of Routes
+     *
+     * @param mixed routes
+     *
+     * @return self
+     */
+    public function setRoutes($routes)
+    {
+        $this->routes = $routes;
 
         return $this;
     }

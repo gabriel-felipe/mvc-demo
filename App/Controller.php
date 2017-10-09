@@ -43,6 +43,9 @@ abstract class Controller
                 $content = $view->render();
                 echo $content;
             }
+        } else {
+            throw new \Exception("Method $action not found in controller ".get_class($this), 1);
+
         }
     }
 
