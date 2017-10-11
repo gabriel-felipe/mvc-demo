@@ -83,6 +83,21 @@ class Router
         }
     }
 
+    /**
+     * urlToParams
+     *
+     * Analisa todas as rotas configuradas buscando por uma combinação com self::$url
+     *
+     * @return (array) um array associativo com os parâmetros da rota encontrada.
+     * Examplo:
+     * array(
+     *   "module" => "MeuModulo"
+     *   "controller"=> "ExampleController",
+     *   "action" => "index",
+     *   "customParam" => "defaultValue"
+     * );
+     *
+     */
     public function urlToParams()
     {
         $url = $this->getUrl();
@@ -141,6 +156,15 @@ class Router
         return false;
     }
 
+    /**
+     * url
+     *
+     * Recebe uma rota e parâmetros adicionais e retorna a url de acordo com as rotas definidas.
+     *
+     * @route (string) Rota no formato modulo/controller/action
+     * @params (array) Array associativo com parâmetros adicionais para a url
+     * 
+     */
     public function url($route,$params=array())
     {
         $urlParams = $this->routeToParams($route);
