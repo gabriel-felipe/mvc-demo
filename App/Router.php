@@ -101,6 +101,7 @@ class Router
     public function urlToParams()
     {
         $url = $this->getUrl();
+        /* Quebra a url da requisição em pedaços. */
         $pieces = explode("/",$url);
         $params = array();
         foreach ($this->getRoutes() as $urlRoute => $params) {
@@ -109,40 +110,75 @@ class Router
                 return $params;
             }
 
+            /* Quebra a url da rota que está sendo testada em pedaços, para comparação. */
             $piecesRoute = explode("/",$urlRoute);
 
             /**
              * Se a url da requisição tiver uma quantidade diferente de pedaços da url sendo comparada,
              * Já pula para a próxima, pois um match é impossível
+             * Ex: modulo/controller/action e modulo/controller => Match impossível, pois uma tem 3 pedaços e a outra só 2.
              */
 
             if (count($piecesRoute) !== count($pieces)) {
                 continue;
             }
+
+            /*
+            * Busca as posições que são ocupadas por parâmetros.
+            */
             $paramsPositions = $this->getParamsPositions($piecesRoute);
             $matchAllPieces = true;
             $replaces = array();
+
+            /*
+            * Começa a checagem pedaço a pedaço vendo se combinam.
+            * Caso algum pedaço falhe a combinação o foreach é interrompido e a rota não serve para essa url.
+            */
             foreach ($pieces as $key => $piece) {
                 $equivalentRoutePiece = $piecesRoute[$key];
                 /* Se os dois pedaços são iguais, então é um match no pedaço, pula a checagem para o próximo pedaço. */
                 if ($equivalentRoutePiece === $piece) {
                     continue;
                 }
+
+                /*
+                * Checa se o pedaço sendo checado é um parâmetro variável,
+                * de acordo com o retorno obtido pela função getParamsPositions
+                * Se for um parâmetro variável, vê se o pedaço da url da requisição
+                * combina com a regex do pedaço da rota, se sim é um match.
+                */
                 $regexIndex = array_search($key,$paramsPositions);
                 if ($regexIndex !== false) {
                     $regex = rtrim($equivalentRoutePiece,"}");
                     $regex = ltrim($regex,"{");
                     $regex = "/$regex/";
+                    /*
+                    * Se for um match, popula um array com replaces a serem feitos.
+                    * Cada parâmetro variável recebe um nome de ${indice}, então o array diz que
+                    * todos os lugares onde na rota estiver escrito ${indice}, devem ser substituidos
+                    * pelo valor presente na url, populando todos os parâmetros corretamente.
+                    */
                     if (preg_match($regex,$piece)) {
                         $replace = "$".($regexIndex+1);
                         $replaces[$replace] = $piece;
                         continue;
                     }
                 }
+
+                /*
+                * Se não é igual, nem se aplica à regex, então o pedaço não combina.
+                * O primeiro pedaço que não combina, automaticamente encerra o foreach.
+                * E seta a variável dizendo que nem todos os pedaços combinam.
+                */
                 $matchAllPieces = false;
                 break;
             }
 
+            /*
+            * Se todos os pedaços são uma combinação,
+            * substitui os pedaços variáveis pelos valores da url
+            * de acordo com o array de replaces populado anteriormente.
+            */
             if ($matchAllPieces) {
                 if ($replaces) {
                     $params = $this->replaceRegexIntoValues($replaces,$params);
@@ -163,7 +199,7 @@ class Router
      *
      * @route (string) Rota no formato modulo/controller/action
      * @params (array) Array associativo com parâmetros adicionais para a url
-     * 
+     *
      */
     public function url($route,$params=array())
     {
@@ -261,6 +297,15 @@ class Router
         return $params;
     }
 
+    /**
+     * getParamsPositions
+     *
+     * Varre cada pedaço da rota checando quais são ocupados por regex, parâmetros.
+     *
+     * @pieces (array) Array de pedaços de uma rota.
+     *
+     * @return array de índices ocupados por parâmetros variáveis.
+     */
     protected function getParamsPositions($pieces)
     {
         $positions = array();
