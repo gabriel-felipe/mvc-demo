@@ -270,6 +270,20 @@ class Router
         return $map;
     }
 
+    /**
+     * routeToParams
+     * Recebe uma string e quebra nas / criando um array associativo
+     * array (
+     *    "module"=>module,
+     *    "controller" => controller,
+     *    "action" => action
+     * )
+     * Caso controller ou action não sejam fornecidos, é usado index como padrão.
+     *
+     * @param (string) $route -> module/controller/action
+     *
+     * @return (array) um array associativo com os parâmetros da rota encontrada.
+     */
     protected function routeToParams($route)
     {
         $route = explode("/",$route);
@@ -318,10 +332,6 @@ class Router
         return $positions;
     }
 
-    protected function matchUrlToRoute($url,$params)
-    {
-
-    }
     /**
      * Get the value of Url
      *
