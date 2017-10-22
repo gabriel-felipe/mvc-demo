@@ -259,6 +259,23 @@ class Router
         return $url;
     }
 
+    /**
+    * getMapRegex
+    * Recebe uma url de rota e retorna um mapa de posições e regex.
+    * Exemplo recebe users/{.*}/{[0-9]+} e retorna:
+    * array(
+    *   "$1" => "{.*}",
+    *   "$2" => "{[0-9]+}"
+    * );
+    * Esse retorno depois é usado para checar se a parte
+    * equivalente de uma url acessada é compatível com a regex da mesma posição.
+    * Por exemplo, ao acessar a url users/index/99
+    * Vai checar se "index" é compativel com a regex "{.*}"
+    * E se 99 é compatível com "{[0-9]+}"
+    *
+    * @param (string) $url => "users/{.*}/{[0-9]+}";ter
+    */
+
     protected function getMapRegex($url)
     {
         $urlPieces = explode("/",$url);
@@ -303,6 +320,23 @@ class Router
         return $result;
     }
 
+    /**
+     * replaceRegexIntoValues
+     * Recebe o mapa de substituições ($regexValuesMap) e aplica em todos os parâmetros do array $params
+     *
+     * @param (array) $regexValuesMap -> array(
+     *  "$1" => "99",
+     *  "$2" => "index"
+     * );
+     *
+     * @param (array) $params -> array(
+     *     "module" => "users",
+     *     "controller" => "index",
+     *     "action" => "$2",
+     *     "id" => "$1"
+     * );
+     * @return (array) um array associativo com os parâmetros da rota encontrada.
+     */
     protected function replaceRegexIntoValues($regexValuesMap,$params)
     {
         foreach ($params as $key => $value) {
