@@ -206,26 +206,61 @@ class Router
         $urlParams = $this->routeToParams($route);
         $adicionalParams = $params;
         $urlAllParams = array_merge($urlParams,$adicionalParams);
+        /**
+        * $urlAllParams = Um array associativo com todos os parâmetros da url a ser gerada.
+        * array(
+        *   "module" => "Meumodulo",
+        *   "controller" => "index",
+        *   "action" => "index",
+        *   "id" => 10
+        * )
+        */
 
         foreach ($this->getRoutes() as $routeUrl => $route) {
             $routeParams = $this->routeToParams($route['route']);
             $mapRegex = $this->getMapRegex($routeUrl);
             $routeAllParams = array_merge($routeParams,$route);
 
+            /**
+            * $routeAllParams = Um array associativo com todos os parâmetros da rota a ser comparada.
+            * array(
+            *   "module" => "Meumodulo",
+            *   "controller" => "index",
+            *   "action" => "index",
+            *   "id" => "$1"
+            * )
+            */
+
+            /**
+            *
+            * Se possuem quantidades diferentes de parâmetros, já não é uma combinação.
+            * Pula para a próxima.
+            *
+            */
             unset($routeAllParams['route']);
             if (count($routeAllParams) !== count($urlAllParams)) {
                 continue;
             }
 
+
             $matchAllParams = true;
             $regexResult = array();
+            /* Para cada parâmetro da rota sendo comparada, verifica se o parâmetro na url é válido */
             foreach ($routeAllParams as $key => $value) {
                 $urlValue = (isset($urlAllParams[$key])) ? $urlAllParams[$key] : null;
 
+                /*
+                * Se os valores na rota e na url forem os mesmos
+                * Eles são uma combinação e continua a comparação com o próximo parâmetro.
+                */
                 if ($value === $urlValue) {
                     continue;
                 }
 
+                /*
+                * Se esse parâmetro da rota for uma regex, faz a comparação para verificar
+                * se o pedaço da url combina com a regex equivalente.
+                */
                 if (array_key_exists($value,$mapRegex)) {
                     $regex = rtrim($mapRegex[$value],"}");
                     $regex = ltrim($regex,"{");
@@ -236,10 +271,19 @@ class Router
                     }
                 }
 
+                /*
+                * Se o código chegou até aqui, é porque não houve combinação.
+                * Se não houve combinação de um dos parâmetros não há motivo para checar os próximos.
+                * Então, terminamos o laço.
+                */
                 $matchAllParams = false;
                 break;
 
             }
+
+            /*
+            * Se todos os parâmetros combinam e essa é a rota, retorna a url de acordo com a rota.
+            */
 
             if ($matchAllParams) {
 
@@ -255,6 +299,11 @@ class Router
 
 
         }
+
+        /*
+        * Caso não tenha encontrado nenhuma rota definida para esses parâmetros
+        * Retorna uma url não amigável.
+        */
         $url = "?url=".implode("/",$urlParams)."&".http_build_query($params);
         return $url;
     }
